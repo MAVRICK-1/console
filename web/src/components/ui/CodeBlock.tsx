@@ -56,12 +56,20 @@ export function CodeBlock({ children, language = 'text', fontSize = 'sm' }: Code
           ) : copyFailed ? (
             <AlertCircle className="w-4 h-4 text-red-500 dark:text-red-400" />
           ) : (
-            <Copy className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+            <Copy className="w-4 h-4 text-muted-foreground" />
           )}
         </button>
       </div>
-      <pre className={`bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-md p-4 overflow-x-auto ${fontSize === 'lg' ? 'text-sm' : fontSize === 'base' ? 'text-xs' : 'text-[11px]'}`}>
-        <code className={`language-${language} text-gray-800 dark:text-gray-300 font-mono`}>
+      <pre
+        className={`bg-secondary border border-border rounded-md p-4 overflow-x-auto ${
+          fontSize === 'lg'
+            ? 'text-sm'
+            : fontSize === 'base'
+            ? 'text-xs'
+            : 'text-[11px]'
+        }`}
+      >
+        <code className={`language-${language} text-foreground/80 font-mono`}>
           {children}
         </code>
       </pre>
