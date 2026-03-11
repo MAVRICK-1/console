@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-03-10T03:46:12Z",
+  "last_updated": "2026-03-11T03:46:33Z",
   "rolling_window_days": 30,
   "categories": {
     "other": {
-      "merged": 51,
-      "closed": 39,
+      "merged": 55,
+      "closed": 41,
       "acceptance_rate": 0.57,
       "status": "normal",
-      "last_evaluated": "2026-03-10T03:46:12Z"
+      "last_evaluated": "2026-03-11T03:46:33Z"
     },
     "security": {
       "merged": 12,
@@ -46,11 +46,11 @@
       "last_evaluated": "2026-03-08T03:46:25Z"
     },
     "a11y": {
-      "merged": 9,
+      "merged": 10,
       "closed": 12,
-      "acceptance_rate": 0.43,
+      "acceptance_rate": 0.45,
       "status": "normal",
-      "last_evaluated": "2026-03-10T03:46:12Z"
+      "last_evaluated": "2026-03-11T03:46:33Z"
     },
     "ui-design": {
       "merged": 3,
@@ -60,11 +60,11 @@
       "last_evaluated": "2026-03-10T03:46:12Z"
     },
     "testing": {
-      "merged": 7,
-      "closed": 5,
-      "acceptance_rate": 0.58,
+      "merged": 9,
+      "closed": 9,
+      "acceptance_rate": 0.5,
       "status": "normal",
-      "last_evaluated": "2026-03-08T03:46:25Z"
+      "last_evaluated": "2026-03-11T03:46:33Z"
     }
   },
   "weekly_insights": {
@@ -250,6 +250,13 @@
       "total_closed": 89,
       "categories_blocked": [],
       "categories_boosted": []
+    },
+    {
+      "date": "2026-03-11",
+      "total_merged": 119,
+      "total_closed": 95,
+      "categories_blocked": [],
+      "categories_boosted": []
     }
   ],
   "rotation_weights": {
@@ -259,9 +266,9 @@
     "performance": 1.5,
     "consistency": 0.98,
     "dom-errors": 1.2,
-    "a11y": 0.65,
+    "a11y": 0.68,
     "ui-design": 0.45,
-    "testing": 0.87
+    "testing": 0.75
   },
   "max_issues_override": 3,
   "pr_guidance": "Keep PRs small and focused. Smaller PRs have higher acceptance rates."
