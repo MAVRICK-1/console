@@ -4,7 +4,7 @@ import { LOCAL_AGENT_WS_URL } from '../../../lib/constants'
 import { useDrillDownActions } from '../../../hooks/useDrillDown'
 import { useCanI } from '../../../hooks/usePermissions'
 import { ClusterBadge } from '../../ui/ClusterBadge'
-import { FileText, Code, Info, Tag, Zap, Loader2, Copy, Check, Layers, Server, Box, Minus, Plus } from 'lucide-react'
+import { FileText, Code, Info, Tag, Zap, Loader2, Copy, Check, Layers, Server, Box, Minus, Plus, GitBranch, AlertCircle, RotateCcw } from 'lucide-react'
 import { cn } from '../../../lib/cn'
 import { RETRY_DELAY_MS, UI_FEEDBACK_TIMEOUT_MS } from '../../../lib/constants/network'
 import { StatusIndicator } from '../../charts/StatusIndicator'
@@ -15,7 +15,7 @@ interface Props {
   data: Record<string, unknown>
 }
 
-type TabType = 'overview' | 'pods' | 'events' | 'describe' | 'yaml'
+type TabType = 'overview' | 'pods' | 'events' | 'describe' | 'yaml' | 'gitops'
 
 export function DeploymentDrillDown({ data }: Props) {
   const { t } = useTranslation()
@@ -41,6 +41,11 @@ export function DeploymentDrillDown({ data }: Props) {
   const [canScale, setCanScale] = useState<boolean | null>(null)
   const [isScaling, setIsScaling] = useState(false)
   const [scaleError, setScaleError] = useState<string | null>(null)
+  const [isRestarting, setIsRestarting] = useState(false)
+  const [restartStatus, setRestartStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [restartError, setRestartError] = useState<string | null>(null)
+  const [copiedPatch, setCopiedPatch] = useState(false)
+  const [lastRestartedAt, setLastRestartedAt] = useState<string | null>(null)
   const { checkPermission } = useCanI()
 
   const reason = data.reason as string
@@ -221,6 +226,62 @@ export function DeploymentDrillDown({ data }: Props) {
   const handleDecrement = () => handleScaleTo(replicas - 1)
   const handleIncrement = () => handleScaleTo(replicas + 1)
 
+  // Build the patch for a declarative GitOps restart.
+  // Returns both the JSON patch for kubectl and a YAML snippet for displaying/copying to Git.
+  const buildRestartPatch = (restartedAt: string) => ({
+    json: JSON.stringify({
+      spec: { template: { metadata: { annotations: { 'kubectl.kubernetes.io/restartedAt': restartedAt } } } },
+    }),
+    yaml: `spec:\n  template:\n    metadata:\n      annotations:\n        kubectl.kubernetes.io/restartedAt: "${restartedAt}"`,
+  })
+
+  // Declarative GitOps restart: patches the restartedAt annotation on the deployment template.
+  // This is Argo CD-friendly because it modifies the deployment spec (not an imperative rollout restart),
+  // so the annotation change can be committed to Git and picked up by Argo CD.
+  const handleGitOpsRestart = async () => {
+    if (!agentConnected) return
+    setIsRestarting(true)
+    setRestartStatus('idle')
+    setRestartError(null)
+
+    const restartedAt = new Date().toISOString()
+    const { json: patch } = buildRestartPatch(restartedAt)
+
+    try {
+      const output = await runKubectl([
+        'patch', 'deployment', deploymentName,
+        '-n', namespace,
+        '--type', 'merge',
+        '-p', patch,
+      ])
+
+      // kubectl patch success output looks like: "deployment.apps/<name> patched"
+      if (output.toLowerCase().includes('patched')) {
+        setRestartStatus('success')
+        setLastRestartedAt(restartedAt)
+        setTimeout(fetchData, 1500)
+      } else if (
+        output.toLowerCase().includes('error') ||
+        output.toLowerCase().includes('forbidden') ||
+        output.toLowerCase().includes('denied')
+      ) {
+        setRestartStatus('error')
+        setRestartError(output || 'Failed to patch deployment annotation')
+      } else if (!output) {
+        setRestartStatus('error')
+        setRestartError('No response from cluster — local agent may not be connected')
+      } else {
+        setRestartStatus('error')
+        setRestartError(`Unexpected response: ${output}`)
+      }
+    } catch (err) {
+      setRestartStatus('error')
+      setRestartError(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setIsRestarting(false)
+    }
+  }
+
   // Track if we've already loaded data to prevent refetching
   const hasLoadedRef = useRef(false)
 
@@ -259,6 +320,7 @@ export function DeploymentDrillDown({ data }: Props) {
     { id: 'overview', label: 'Overview', icon: Info },
     { id: 'pods', label: `Pods (${pods.length})`, icon: Box },
     { id: 'events', label: 'Events', icon: Zap },
+    { id: 'gitops', label: 'GitOps', icon: GitBranch },
     { id: 'describe', label: 'Describe', icon: FileText },
     { id: 'yaml', label: 'YAML', icon: Code },
   ]
@@ -593,6 +655,135 @@ export function DeploymentDrillDown({ data }: Props) {
                 <p className="text-yellow-400">{t('drilldown.empty.localAgentNotConnected')}</p>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'gitops' && (
+          <div className="space-y-6">
+            {/* Info banner */}
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-purple-500/10 border border-purple-500/20">
+              <AlertCircle className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-purple-400">Declarative GitOps Restart (Argo CD compatible)</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Instead of using <code className="px-1 rounded bg-secondary font-mono">kubectl rollout restart</code> (imperative),
+                  this patches the <code className="px-1 rounded bg-secondary font-mono">kubectl.kubernetes.io/restartedAt</code> annotation
+                  on the deployment template. The annotation change is declarative and can be committed to Git so Argo CD picks it up automatically.
+                </p>
+              </div>
+            </div>
+
+            {/* Declarative Restart Action */}
+            <div className="p-4 rounded-lg bg-card/50 border border-border space-y-4">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-orange-400" />
+                Declarative Deployment Restart
+              </h3>
+
+              {restartStatus === 'success' && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-sm">
+                  <Check className="w-4 h-4" />
+                  Restart annotation applied. Deployment is rolling out new pods.
+                </div>
+              )}
+              {restartStatus === 'error' && restartError && (
+                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                  {restartError}
+                </div>
+              )}
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleGitOpsRestart}
+                  disabled={!agentConnected || isRestarting}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                    agentConnected && !isRestarting
+                      ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border border-orange-500/30'
+                      : 'bg-secondary/30 text-muted-foreground cursor-not-allowed border border-border'
+                  )}
+                  title={!agentConnected ? 'Local agent not connected' : 'Patch restartedAt annotation declaratively'}
+                >
+                  {isRestarting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="w-4 h-4" />
+                  )}
+                  {isRestarting ? 'Applying restart...' : 'Apply Declarative Restart'}
+                </button>
+                {!agentConnected && (
+                  <span className="text-xs text-yellow-400">Local agent not connected</span>
+                )}
+              </div>
+            </div>
+
+            {/* YAML patch to commit to Git */}
+            <div className="p-4 rounded-lg bg-card/50 border border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <GitBranch className="w-4 h-4 text-purple-400" />
+                  Declarative Patch (commit to Git)
+                </h3>
+                <button
+                  onClick={() => {
+                    const ts = lastRestartedAt ?? new Date().toISOString()
+                    navigator.clipboard.writeText(buildRestartPatch(ts).yaml)
+                    setCopiedPatch(true)
+                    setTimeout(() => setCopiedPatch(false), 2000)
+                  }}
+                  className="px-2 py-1 rounded bg-secondary/50 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                >
+                  {copiedPatch ? <><Check className="w-3 h-3 text-green-400" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Add this to your deployment manifest in Git. Argo CD will detect the annotation change and trigger a rolling restart automatically.
+              </p>
+              <pre className="p-3 rounded-lg bg-black/50 border border-border text-xs font-mono text-foreground whitespace-pre overflow-auto">
+{`spec:
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: "${lastRestartedAt ?? '<timestamp>'}"`}
+              </pre>
+              {!lastRestartedAt && (
+                <p className="text-xs text-muted-foreground italic">
+                  Click "Apply Declarative Restart" to generate a real timestamp, or replace <code className="px-1 rounded bg-secondary font-mono">&lt;timestamp&gt;</code> with the current UTC time.
+                </p>
+              )}
+            </div>
+
+            {/* How it works */}
+            <div className="p-4 rounded-lg bg-card/50 border border-border space-y-3">
+              <h3 className="text-sm font-semibold text-foreground">How it works with Argo CD</h3>
+              <ol className="text-xs text-muted-foreground space-y-2 list-none">
+                <li className="flex items-start gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-[10px] font-bold">1</span>
+                  Update the <code className="px-1 rounded bg-secondary font-mono">restartedAt</code> annotation in your deployment YAML in Git.
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-[10px] font-bold">2</span>
+                  Commit and push the change. Argo CD detects the diff and marks the app as OutOfSync.
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-[10px] font-bold">3</span>
+                  Argo CD syncs the application, applying the annotation change which triggers Kubernetes to perform a rolling restart.
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-[10px] font-bold">4</span>
+                  The restart is fully auditable via Git history — no imperative commands needed.
+                </li>
+              </ol>
+              <a
+                href="https://argo-cd.readthedocs.io/en/stable/operator-manual/declarative-setup/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 hover:underline mt-1"
+              >
+                <GitBranch className="w-3 h-3" />
+                Argo CD declarative setup docs →
+              </a>
+            </div>
           </div>
         )}
       </div>
