@@ -68,18 +68,12 @@
     }
   },
   "weekly_insights": {
-    "best_pr_size": "L",
+    "best_pr_size": "S",
     "size_acceptance": {},
     "type_acceptance": {},
-    "common_rejection_reasons": [
-      "- PR #2029: Closing: replacing `<button>` with `<div role=\"button\">` in AlertBadge.tsx and CardControls.tsx is an accessibility regression. Native `<button>` elements are the correct semantic choice. Also conflicts with #2028 on CloudProviderIcon.tsx.",
-      "- PR #2027: Closing: multi-major-version bumps are too risky in a single PR. Splitting into individual upgrades: #2036 (globals 15→17), #2037 (Vite 6→7), #2038 (@dnd-kit/sortable 8→9). ESLint 9→10 is blocked by upstream peer dep support. React 18→19 requires its own careful migration.",
-      "- PR #2008: Closing — refresh icons are intentionally static and only animate via conditional `isRefreshing` state. Not a bug.",
-      "- PR #2006: Closing — INVENTORY.md doesn't exist in this repo. False positive from Auto-QA.",
-      "- PR #1999: Test PR — closing with test issue #1997."
-    ],
+    "common_rejection_reasons": [],
     "best_change_type": "bug_fix",
-    "last_report_date": "2026-03-08"
+    "last_report_date": "2026-03-15"
   },
   "cncf_insights": {
     "last_scan_date": "2026-03-11",
