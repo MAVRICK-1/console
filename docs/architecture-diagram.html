@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KubeStellar Console — Detailed Architecture Diagram</title>
+  <style>
+    /* ─── Reset & Base ─────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #1f2937;
+      --border:    #30363d;
+      --border2:   #374151;
+      --text:      #e6edf3;
+      --text2:     #8b949e;
+      --accent:    #58a6ff;
+      --green:     #3fb950;
+      --yellow:    #d29922;
+      --purple:    #bc8cff;
+      --orange:    #f0883e;
+      --red:       #f85149;
+      --teal:      #39d353;
+      --pink:      #ff7b72;
+
+      --layer-h:     auto;
+      --card-r:      10px;
+      --flow-dur:    2.4s;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ─── Header ───────────────────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #1a1f2e 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 28px 40px 24px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    header img.logo { width: 46px; height: 46px; border-radius: 8px; }
+    header .title-block h1 {
+      font-size: 22px;
+      font-weight: 700;
+      background: linear-gradient(90deg, #58a6ff, #bc8cff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header .title-block p { color: var(--text2); font-size: 13px; margin-top: 2px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    }
+    .badge-blue  { background: rgba(88,166,255,.15); color: #58a6ff; border: 1px solid rgba(88,166,255,.3); }
+    .badge-green { background: rgba(63,185,80,.15);  color: #3fb950; border: 1px solid rgba(63,185,80,.3); }
+
+    /* ─── Main Layout ───────────────────────────────────────────────────── */
+    .page { max-width: 1600px; margin: 0 auto; padding: 32px 24px 60px; }
+
+    /* ─── Section titles ─────────────────────────────────────────────────*/
+    .section-title {
+      font-size: 11px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--text2);
+      margin-bottom: 10px;
+    }
+
+    /* ─── Layer Cards ───────────────────────────────────────────────────── */
+    .layer {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 0;
+      position: relative;
+      background: var(--surface);
+    }
+    .layer-label {
+      position: absolute; top: -11px; left: 18px;
+      background: var(--surface);
+      padding: 0 8px;
+      font-size: 10px; font-weight: 700; letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    /* ─── Grid helpers ──────────────────────────────────────────────────── */
+    .grid { display: grid; gap: 12px; }
+    .g2 { grid-template-columns: repeat(2, 1fr); }
+    .g3 { grid-template-columns: repeat(3, 1fr); }
+    .g4 { grid-template-columns: repeat(4, 1fr); }
+    .g5 { grid-template-columns: repeat(5, 1fr); }
+    .g6 { grid-template-columns: repeat(6, 1fr); }
+    .g7 { grid-template-columns: repeat(7, 1fr); }
+
+    /* ─── Box Cards ─────────────────────────────────────────────────────── */
+    .box {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: var(--card-r);
+      padding: 12px 14px;
+      display: flex; flex-direction: column; gap: 6px;
+      transition: border-color .2s, box-shadow .2s;
+      cursor: default;
+      position: relative;
+    }
+    .box:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(88,166,255,.2), 0 4px 20px rgba(0,0,0,.4);
+      z-index: 2;
+    }
+    .box .top { display: flex; align-items: center; gap: 8px; }
+    .box .top img, .box .top .icon {
+      width: 26px; height: 26px; border-radius: 5px; object-fit: contain;
+      flex-shrink: 0;
+    }
+    .box .top .icon {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px;
+    }
+    .box .top .name { font-size: 12px; font-weight: 700; color: var(--text); }
+    .box .desc { font-size: 11px; color: var(--text2); line-height: 1.4; }
+    .box .tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+    .tag {
+      font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    .tag-blue   { background: rgba(88,166,255,.15);  color: #58a6ff; }
+    .tag-green  { background: rgba(63,185,80,.15);   color: #3fb950; }
+    .tag-purple { background: rgba(188,140,255,.15); color: #bc8cff; }
+    .tag-orange { background: rgba(240,136,62,.15);  color: #f0883e; }
+    .tag-red    { background: rgba(248,81,73,.15);   color: #f85149; }
+    .tag-teal   { background: rgba(57,211,83,.15);   color: #39d353; }
+    .tag-yellow { background: rgba(210,153,34,.15);  color: #d29922; }
+
+    /* ─── Arrows / connectors ───────────────────────────────────────────── */
+    .arrow-row {
+      display: flex; justify-content: center; align-items: center;
+      gap: 8px; padding: 6px 0;
+    }
+    .arrow-row .line {
+      flex: 1; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--border2), transparent);
+    }
+    .arrow-down {
+      display: flex; justify-content: center; align-items: center;
+      padding: 4px 0;
+    }
+    .arrow-down svg { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
+
+    /* Flow path connector between big layers */
+    .connector {
+      display: flex; flex-direction: column; align-items: center; gap: 0;
+      margin: 4px 0;
+    }
+    .connector .pipe {
+      width: 2px; height: 32px;
+      background: linear-gradient(to bottom, var(--border), var(--accent));
+      position: relative;
+    }
+    .connector .pipe::after {
+      content: '';
+      position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 0; height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 8px solid var(--accent);
+    }
+    .connector .label {
+      font-size: 10px; color: var(--text2); font-weight: 600;
+      background: var(--bg); padding: 1px 6px; border-radius: 4px;
+      border: 1px solid var(--border); margin: 2px 0;
+    }
+
+    /* ─── Data-flow animated path ────────────────────────────────────────── */
+    .flow-container {
+      position: relative; overflow: hidden;
+    }
+    .flow-dot {
+      position: absolute;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent);
+      animation: flowDown var(--flow-dur) ease-in-out infinite;
+    }
+    @keyframes flowDown {
+      0%   { top: -6px; opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: 1; }
+      100% { top: calc(100% + 6px); opacity: 0; }
+    }
+
+    /* ─── Main architecture stack ─────────────────────────────────────────*/
+    .arch-stack {
+      display: flex; flex-direction: column; gap: 0;
+    }
+    .arch-layer {
+      position: relative;
+    }
+    .arch-layer + .arch-layer { }
+    .between-layers {
+      display: flex; justify-content: center; align-items: center;
+      gap: 20px; padding: 10px 0; position: relative;
+    }
+    .between-layers .flow-arrow {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+    }
+    .between-layers .flow-arrow .proto {
+      font-size: 10px; color: var(--text2); font-weight: 600;
+      background: var(--bg); border: 1px solid var(--border2);
+      padding: 1px 7px; border-radius: 4px;
+    }
+    .between-layers .flow-arrow svg {
+      color: var(--accent); animation: pulse 2s ease-in-out infinite;
+    }
+
+    /* ─── Highlighted sub-box ──────────────────────────────────────────────*/
+    .highlight-box {
+      border: 1px solid rgba(88,166,255,.4);
+      background: rgba(88,166,255,.05);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .highlight-box .title {
+      font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 6px;
+    }
+
+    /* ─── Cloud-native tools section ─────────────────────────────────────*/
+    .cncf-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+    }
+    .tool-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 8px;
+      transition: all .2s;
+    }
+    .tool-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(88,166,255,.15), 0 6px 24px rgba(0,0,0,.5);
+      transform: translateY(-2px);
+    }
+    .tool-card .head { display: flex; align-items: center; gap: 10px; }
+    .tool-card .head img {
+      width: 34px; height: 34px; object-fit: contain; border-radius: 6px;
+    }
+    .tool-card .head .name { font-size: 13px; font-weight: 700; }
+    .tool-card .head .category {
+      font-size: 10px; color: var(--text2); margin-top: 1px;
+    }
+    .tool-card .how {
+      font-size: 11px; color: var(--text2); line-height: 1.5;
+    }
+    .tool-card .flow-steps {
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .flow-step {
+      display: flex; align-items: flex-start; gap: 6px;
+      font-size: 10px; color: var(--text2);
+    }
+    .flow-step .num {
+      width: 16px; height: 16px; border-radius: 50%; font-size: 9px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-weight: 700;
+      background: rgba(88,166,255,.15); color: var(--accent);
+    }
+
+    /* ─── Legend ─────────────────────────────────────────────────────────*/
+    .legend {
+      display: flex; gap: 20px; flex-wrap: wrap;
+      padding: 14px 18px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    /* ─── Data-flow diagram ──────────────────────────────────────────────*/
+    .dataflow {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      white-space: pre;
+      color: var(--text2);
+      line-height: 1.7;
+      overflow-x: auto;
+    }
+    .dataflow .k { color: #58a6ff; }
+    .dataflow .v { color: #3fb950; }
+    .dataflow .c { color: #8b949e; }
+    .dataflow .a { color: #f0883e; }
+    .dataflow .p { color: #bc8cff; }
+
+    /* ─── Divider ─────────────────────────────────────────────────────────*/
+    .divider {
+      height: 1px; background: var(--border); margin: 40px 0;
+    }
+    h2.section-h {
+      font-size: 20px; font-weight: 700;
+      margin-bottom: 20px; color: var(--text);
+    }
+    h2.section-h span { color: var(--accent); }
+
+    /* ─── Tooltip ─────────────────────────────────────────────────────────*/
+    .tooltip-wrap { position: relative; display: inline-block; }
+    .tooltip-content {
+      display: none;
+      position: absolute; z-index: 999;
+      top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+      background: #0d1117; border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px;
+      width: 240px; font-size: 11px; color: var(--text2);
+      box-shadow: 0 8px 32px rgba(0,0,0,.6);
+      line-height: 1.5;
+    }
+    .tooltip-wrap:hover .tooltip-content { display: block; }
+
+    /* ─── Responsive ──────────────────────────────────────────────────────*/
+    @media (max-width: 900px) {
+      .g4, .g5, .g6, .g7 { grid-template-columns: repeat(2, 1fr); }
+      .g3 { grid-template-columns: repeat(2, 1fr); }
+      header { flex-direction: column; align-items: flex-start; }
+    }
+    @media (max-width: 600px) {
+      .g2, .g3, .g4, .g5, .g6, .g7 { grid-template-columns: 1fr; }
+    }
+
+    /* ─── Sticky TOC ──────────────────────────────────────────────────────*/
+    .toc {
+      position: sticky; top: 16px; float: right; margin-left: 20px; margin-bottom: 20px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 16px; width: 210px; font-size: 12px;
+    }
+    .toc h4 { color: var(--text2); font-size: 10px; letter-spacing: .1em;
+               text-transform: uppercase; font-weight: 700; margin-bottom: 8px; }
+    .toc a { display: block; color: var(--text2); text-decoration: none;
+              padding: 3px 0; border-left: 2px solid transparent; padding-left: 8px; }
+    .toc a:hover { color: var(--accent); border-left-color: var(--accent); }
+
+    .sr { clear: both; }
+  </style>
+</head>
+<body>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<!-- HEADER                                                                  -->
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<header>
+  <img class="logo"
+       src="https://avatars.githubusercontent.com/u/97053350?s=200&v=4"
+       alt="KubeStellar logo" />
+  <div class="title-block">
+    <h1>KubeStellar Console</h1>
+    <p>Detailed Architecture Diagram &nbsp;·&nbsp; Cloud-Native Integrations &nbsp;·&nbsp; Internal Data Flow</p>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
+    <span class="badge badge-blue">Go 1.25 · Fiber</span>
+    <span class="badge badge-blue">React 18 · Vite</span>
+    <span class="badge badge-green">397+ Dashboard Cards</span>
+    <span class="badge badge-green">CNCF Ecosystem</span>
+  </div>
+</header>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<!-- MAIN PAGE                                                               -->
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<div class="page">
+
+  <!-- sticky toc -->
+  <nav class="toc">
+    <h4>Contents</h4>
+    <a href="#arch">System Architecture</a>
+    <a href="#frontend">Frontend Layer</a>
+    <a href="#backend">Backend Layer</a>
+    <a href="#agent">Local Agent</a>
+    <a href="#cncf">Cloud-Native Tools</a>
+    <a href="#ai">AI Providers</a>
+    <a href="#dataflow">Data Flow</a>
+    <a href="#security">Auth &amp; Security</a>
+  </nav>
+
+  <!-- ─── LEGEND ──────────────────────────────────────────────────────── -->
+  <div class="legend" style="margin-bottom:28px;">
+    <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div> REST / HTTP</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div> WebSocket / SSE</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#bc8cff"></div> MCP (JSON-RPC)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f0883e"></div> Kubernetes API</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div> OAuth 2.0 / JWT</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#39d353"></div> SQLite (WAL)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div> AI Provider API</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 1 — FULL ARCHITECTURE STACK                                  -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div id="arch" style="margin-bottom:16px;">
+    <h2 class="section-h">1. <span>System Architecture</span> — Full Stack</h2>
+  </div>
+
+  <div class="arch-stack">
+
+    <!-- ── LAYER 0: External Users / Auth ─────────────────────────────── -->
+    <div class="arch-layer">
+      <div class="layer" style="border-color: rgba(210,153,34,.5);">
+        <span class="layer-label" style="color:var(--yellow);">EXTERNAL — Users &amp; Auth</span>
+        <div class="grid g4" style="grid-template-columns:1fr 1fr 1fr 1fr;">
+
+          <div class="box">
+            <div class="top">
+              <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub" />
+              <span class="name">GitHub OAuth 2.0</span>
+            </div>
+            <div class="desc">User signs in via GitHub. Scopes: read:user, user:email. JWT token returned (7-day TTL, silent refresh at 50%).</div>
+            <div class="tags"><span class="tag tag-yellow">OAuth 2.0</span><span class="tag tag-blue">JWT</span></div>
+          </div>
+
+          <div class="box">
+            <div class="top">
+              <div class="icon">🌐</div>
+              <span class="name">Browser Client</span>
+            </div>
+            <div class="desc">Chrome / Firefox / Safari. React app loaded from port 5174 (dev) or served statically from the Go backend on port 8080.</div>
+            <div class="tags"><span class="tag tag-blue">React 18</span><span class="tag tag-blue">TypeScript</span></div>
+          </div>
+
+          <div class="box">
+            <div class="top">
+              <div class="icon">🤖</div>
+              <span class="name">Coding Agents</span>
+            </div>
+            <div class="desc">Claude Code, GitHub Copilot, Cursor, Cline, Continue, VSCode, JetBrains. Connect via kc-agent MCP bridge for cluster context.</div>
+            <div class="tags"><span class="tag tag-purple">MCP</span><span class="tag tag-orange">AI</span></div>
+          </div>
+
+          <div class="box">
+            <div class="top">
+              <div class="icon">📟</div>
+              <span class="name">CLI / kubectl</span>
+            </div>
+            <div class="desc">kubectl commands proxied through kc-agent's terminal emulator (xterm.js). Live command output streamed via WebSocket.</div>
+            <div class="tags"><span class="tag tag-green">WS</span><span class="tag tag-orange">kubectl</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- arrow -->
+    <div class="between-layers">
+      <div class="flow-arrow">
+        <span class="proto">HTTPS · REST · WebSocket</span>
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M8 1v10.586l3.293-3.293 1.414 1.414L8 15.414l-4.707-4.707 1.414-1.414L8 11.586V1h0z"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ── LAYER 1: Frontend ───────────────────────────────────────────── -->
+    <div id="frontend" class="arch-layer">
+      <div class="layer" style="border-color: rgba(88,166,255,.5);">
+        <span class="layer-label" style="color:var(--accent);">FRONTEND — React 18 + TypeScript + Vite 8</span>
+
+        <!-- App Shell -->
+        <div class="highlight-box" style="margin-bottom:12px;">
+          <div class="title">App Shell — web/src/App.tsx</div>
+          <div class="grid g7" style="gap:6px;">
+            <div style="font-size:10px;color:var(--text2);padding:4px 8px;background:rgba(88,166,255,.07);border-radius:5px;text-align:center;">AuthProvider<br/><span style="color:var(--accent);">JWT</span></div>
+            <div style="font-size:10px;color:var(--text2);padding:4px 8px;background:rgba(88,166,255,.07);border-radius:5px;text-align:center;">ThemeProvider<br/><span style="color:var(--accent);">dark/light</span></div>
+            <div style="font-size:10px;color:var(--text2);padding:4px 8px;background:rgba(88,166,255,.07);border-radius:5px;text-align:center;">GlobalFilters<br/><span style="color:var(--accent);">cluster/ns</span></div>
+            <div style="font-size:10px;color:var(--text2);padding:4px 8px;background:rgba(88,166,255,.07);border-radius:5px;text-align:center;">DashboardCtx<br/><span style="color:var(--accent);">cards</span></div>
+            <div style="font-size:10px;color:var(--text2);padding:4px 8px;background:rgba(88,166,255,.07);border-radius:5px;text-align:center;">MissionCtx<br/><span style="color:var(--accent);">guided</span></div>
+            <div style="font-size:10px;color:var(--text2);padding:4px 8px;background:rgba(88,166,255,.07);border-radius:5px;text-align:center;">ToastProvider<br/><span style="color:var(--accent);">alerts</span></div>
+            <div style="font-size:10px;color:var(--text2);padding:4px 8px;background:rgba(88,166,255,.07);border-radius:5px;text-align:center;">DemoProvider<br/><span style="color:var(--accent);">fallback</span></div>
+          </div>
+        </div>
+
+        <!-- 4 sub-layers -->
+        <div class="grid g4">
+
+          <!-- Cards -->
+          <div class="box">
+            <div class="top">
+              <div class="icon">🃏</div>
+              <span class="name">Dashboard Cards (397+)</span>
+            </div>
+            <div class="desc">Self-contained React components. Each maps to a useCached* hook. Rendered inside CardWrapper with skeleton loading, Demo badge, refresh spinner.</div>
+            <div class="tags">
+              <span class="tag tag-blue">ClusterHealth</span>
+              <span class="tag tag-blue">PodIssues</span>
+              <span class="tag tag-orange">ArgoCD</span>
+              <span class="tag tag-green">Helm</span>
+              <span class="tag tag-purple">Kyverno</span>
+              <span class="tag tag-red">Trivy</span>
+              <span class="tag tag-teal">GPU</span>
+            </div>
+          </div>
+
+          <!-- Cache -->
+          <div class="box">
+            <div class="top">
+              <div class="icon">💾</div>
+              <span class="name">3-Tier Cache System</span>
+            </div>
+            <div class="desc">
+              <b>Tier 1:</b> SQLite WASM (modernc/sqlite) via Web Worker<br/>
+              <b>Tier 2:</b> IndexedDB fallback<br/>
+              <b>Tier 3:</b> In-memory (session)<br/>
+              SWR: show cached instantly, refresh in background.
+            </div>
+            <div class="tags"><span class="tag tag-teal">SQLite WASM</span><span class="tag tag-blue">IndexedDB</span><span class="tag tag-green">SWR</span></div>
+          </div>
+
+          <!-- Routes & Pages -->
+          <div class="box">
+            <div class="top">
+              <div class="icon">📄</div>
+              <span class="name">Routes + Pages (lazy)</span>
+            </div>
+            <div class="desc">
+              / Dashboard &nbsp;/clusters &nbsp;/missions<br/>
+              /workloads &nbsp;/storage &nbsp;/compute<br/>
+              /network &nbsp;/security &nbsp;/gitops<br/>
+              /gpu &nbsp;/aiml &nbsp;/cicd &nbsp;/insights<br/>
+              Vite code-splits each route (~30–100 KB).
+            </div>
+            <div class="tags"><span class="tag tag-blue">React Router 7</span><span class="tag tag-green">Lazy</span></div>
+          </div>
+
+          <!-- Real-time + AI -->
+          <div class="box">
+            <div class="top">
+              <div class="icon">⚡</div>
+              <span class="name">Real-time + AI Chat</span>
+            </div>
+            <div class="desc">
+              <b>WebSocket</b>: live event stream from backend hub.<br/>
+              <b>SSE</b>: streaming pod lists &amp; large datasets.<br/>
+              <b>CardChat</b>: per-card AI analysis (MCP bridge).<br/>
+              <b>ECharts + Recharts</b>: live chart rendering.
+            </div>
+            <div class="tags"><span class="tag tag-green">WebSocket</span><span class="tag tag-blue">SSE</span><span class="tag tag-purple">MCP AI</span></div>
+          </div>
+        </div>
+
+        <!-- Card Registry row -->
+        <div style="margin-top:10px;" class="highlight-box">
+          <div class="title">Card Registry — web/src/components/cards/cardRegistry.ts</div>
+          <div style="font-size:11px;color:var(--text2);">
+            Each card registers: <code style="color:var(--accent);">{ type, component, defaultWidth, refreshRate, dataHook, drillActions }</code>
+            &nbsp;·&nbsp; 397+ entries &nbsp;·&nbsp; Dynamic cards via plugin system &nbsp;·&nbsp; Presets from <code style="color:var(--accent);">presets/</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- arrow -->
+    <div class="between-layers">
+      <div class="flow-arrow">
+        <span class="proto">REST API · WebSocket · SSE &nbsp;(port 8080)</span>
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M8 1v10.586l3.293-3.293 1.414 1.414L8 15.414l-4.707-4.707 1.414-1.414L8 11.586V1h0z"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ── LAYER 2: Backend ────────────────────────────────────────────── -->
+    <div id="backend" class="arch-layer">
+      <div class="layer" style="border-color: rgba(63,185,80,.5);">
+        <span class="layer-label" style="color:var(--green);">BACKEND — Go 1.25 + Fiber v2 (port 8080)</span>
+
+        <div class="grid g4" style="margin-bottom:12px;">
+
+          <div class="box">
+            <div class="top">
+              <img src="https://raw.githubusercontent.com/gofiber/fiber/master/.github/logo.svg" alt="Fiber" style="background:#fff;padding:2px;" />
+              <span class="name">Fiber HTTP Server</span>
+            </div>
+            <div class="desc">Go Fiber v2 serving REST API on :8080. Middleware: CORS, rate-limit, Brotli compression, recovery, structured logging. Async init with loading page while backend starts.</div>
+            <div class="tags"><span class="tag tag-green">Go Fiber</span><span class="tag tag-blue">Brotli</span><span class="tag tag-orange">Rate Limit</span></div>
+          </div>
+
+          <div class="box">
+            <div class="top">
+              <div class="icon">⚙️</div>
+              <span class="name">90+ API Handlers</span>
+            </div>
+            <div class="desc">
+              pkg/api/handlers/<br/>
+              mcp.go · workloads.go · rbac.go<br/>
+              auth.go · dashboard.go · cards.go<br/>
+              websocket.go · sse.go · events.go<br/>
+              missions.go · settings.go · ping.go
+            </div>
+            <div class="tags"><span class="tag tag-blue">REST</span><span class="tag tag-green">WS Hub</span><span class="tag tag-orange">SSE</span></div>
+          </div>
+
+          <div class="box">
+            <div class="top">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/97/Sqlite-square-icon.svg/240px-Sqlite-square-icon.svg.png" alt="SQLite" />
+              <span class="name">SQLite Store (WAL)</span>
+            </div>
+            <div class="desc">modernc.org/sqlite (pure Go, no CGO). WAL mode + NORMAL sync. Schema: users, dashboards, cards, notifications, events, missions, feedback. Pool: 25 open / 5 idle.</div>
+            <div class="tags"><span class="tag tag-teal">SQLite</span><span class="tag tag-green">WAL</span><span class="tag tag-blue">25 pool</span></div>
+          </div>
+
+          <div class="box">
+            <div class="top">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Prometheus_software_logo.svg/200px-Prometheus_software_logo.svg.png" alt="Prometheus" />
+              <span class="name">Prometheus Metrics</span>
+            </div>
+            <div class="desc">Go backend exports /metrics endpoint (prometheus/client_golang). Tracks: request latency, WS connections, MCP call durations, cluster query times, cache hit rates.</div>
+            <div class="tags"><span class="tag tag-orange">Prometheus</span><span class="tag tag-green">/metrics</span></div>
+          </div>
+        </div>
+
+        <!-- Auth detail -->
+        <div class="highlight-box">
+          <div class="title">Authentication Flow — pkg/api/handlers/auth.go</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:10px;color:var(--text2);align-items:center;">
+            <div style="padding:4px 8px;background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);border-radius:5px;">① User clicks Login</div>
+            <div>→</div>
+            <div style="padding:4px 8px;background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);border-radius:5px;">② Backend generates state (10min TTL)</div>
+            <div>→</div>
+            <div style="padding:4px 8px;background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);border-radius:5px;">③ Redirect to GitHub OAuth</div>
+            <div>→</div>
+            <div style="padding:4px 8px;background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);border-radius:5px;">④ GitHub callback /auth/callback</div>
+            <div>→</div>
+            <div style="padding:4px 8px;background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);border-radius:5px;">⑤ Exchange code for token</div>
+            <div>→</div>
+            <div style="padding:4px 8px;background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);border-radius:5px;">⑥ Create user in SQLite</div>
+            <div>→</div>
+            <div style="padding:4px 8px;background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);border-radius:5px;">⑦ Issue JWT (7 days)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- arrow -->
+    <div class="between-layers">
+      <div class="flow-arrow">
+        <span class="proto">JSON-RPC stdio · HTTP · kubeconfig</span>
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M8 1v10.586l3.293-3.293 1.414 1.414L8 15.414l-4.707-4.707 1.414-1.414L8 11.586V1h0z"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ── LAYER 3: Local Agent + MCP ─────────────────────────────────── -->
+    <div id="agent" class="arch-layer">
+      <div class="layer" style="border-color: rgba(188,140,255,.5);">
+        <span class="layer-label" style="color:var(--purple);">LOCAL AGENT — kc-agent (port 8585) + MCP Bridge</span>
+
+        <div class="grid g4">
+
+          <div class="box">
+            <div class="top">
+              <div class="icon">🔌</div>
+              <span class="name">kc-agent (cmd/kc-agent)</span>
+            </div>
+            <div class="desc">Lightweight Go binary running on user's machine. WebSocket tunnel to console. Discovers kubeconfigs. Bridges browser ↔ local clusters.</div>
+            <div class="tags"><span class="tag tag-green">WS tunnel</span><span class="tag tag-purple">kubeconfig</span></div>
+          </div>
+
+          <div class="box">
+            <div class="top">
+              <div class="icon">🌉</div>
+              <span class="name">MCP Bridge (pkg/mcp)</span>
+            </div>
+            <div class="desc">Spawns kubestellar-ops and kubestellar-deploy as child processes. Communicates via JSON-RPC over stdio. Three clients: opsClient · deployClient · gadgetClient.</div>
+            <div class="tags"><span class="tag tag-purple">MCP</span><span class="tag tag-blue">JSON-RPC</span><span class="tag tag-orange">stdio</span></div>
+          </div>
+
+          <div class="box">
+            <div class="top">
+              <img src="https://avatars.githubusercontent.com/u/97053350?s=200&v=4" alt="KubeStellar" />
+              <span class="name">kubestellar-ops</span>
+            </div>
+            <div class="desc">KubeStellar binary for cluster read operations: GetClusters, GetPods, GetPodIssues, GetHealth, GetRBAC, GetSecurityIssues, GetDrift.</div>
+            <div class="tags"><span class="tag tag-purple">MCP server</span><span class="tag tag-orange">Read</span></div>
+          </div>
+
+          <div class="box">
+            <div class="top">
+              <img src="https://avatars.githubusercontent.com/u/97053350?s=200&v=4" alt="KubeStellar" />
+              <span class="name">kubestellar-deploy</span>
+            </div>
+            <div class="desc">KubeStellar binary for deploy operations: apply manifests, scale workloads, rollback deployments, manage bindingpolicies across clusters.</div>
+            <div class="tags"><span class="tag tag-purple">MCP server</span><span class="tag tag-red">Write</span></div>
+          </div>
+        </div>
+
+        <!-- kagent row -->
+        <div style="margin-top:10px;" class="grid g2">
+          <div class="box">
+            <div class="top">
+              <div class="icon">🤖</div>
+              <span class="name">kagent (pkg/kagent)</span>
+            </div>
+            <div class="desc">HTTP client that talks to local kagent binary. kagent bridges AI coding agents (Claude, Copilot, Codex, Continue) to cluster tooling. Provides cluster context to AI prompts.</div>
+            <div class="tags"><span class="tag tag-purple">AI bridge</span><span class="tag tag-orange">HTTP</span></div>
+          </div>
+          <div class="box">
+            <div class="top">
+              <div class="icon">🔑</div>
+              <span class="name">AI Providers (pkg/agent, 42+)</span>
+            </div>
+            <div class="desc">Claude (Anthropic), OpenAI GPT, Google Gemini, plus 39 local agent adapters. Used for: card suggestions, mission troubleshooting, icon suggestions, smart analysis.</div>
+            <div class="tags"><span class="tag tag-red">Claude</span><span class="tag tag-green">OpenAI</span><span class="tag tag-orange">Gemini</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- arrow -->
+    <div class="between-layers">
+      <div class="flow-arrow">
+        <span class="proto">Kubernetes API (HTTPS :443) · kubeconfig contexts</span>
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M8 1v10.586l3.293-3.293 1.414 1.414L8 15.414l-4.707-4.707 1.414-1.414L8 11.586V1h0z"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ── LAYER 4: Kubernetes + Cloud-Native ─────────────────────────── -->
+    <div class="arch-layer">
+      <div class="layer" style="border-color: rgba(240,136,62,.5);">
+        <span class="layer-label" style="color:var(--orange);">KUBERNETES LAYER — Multi-Cluster (pkg/k8s)</span>
+
+        <div class="grid g4" style="margin-bottom:10px;">
+          <div class="box">
+            <div class="top">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/39/Kubernetes_logo_without_workmark.svg/200px-Kubernetes_logo_without_workmark.svg.png" alt="Kubernetes" />
+              <span class="name">Kubernetes Clusters</span>
+            </div>
+            <div class="desc">MultiClusterClient (pkg/k8s/client.go) loads kubeconfig contexts. Typed clients per cluster (kubernetes.Interface + dynamic). Queries Pods, Deployments, StatefulSets, DaemonSets, Jobs, RBAC, CRDs.</div>
+            <div class="tags"><span class="tag tag-orange">k8s.io/client-go</span><span class="tag tag-blue">multi-ctx</span></div>
+          </div>
+          <div class="box">
+            <div class="top">
+              <img src="https://avatars.githubusercontent.com/u/97053350?s=200&v=4" alt="KubeStellar" />
+              <span class="name">KubeStellar Bindings</span>
+            </div>
+            <div class="desc">BindingPolicy CRDs spread workloads across clusters. Console reads binding status, drift detection, and overlay comparison across the KubeStellar fleet.</div>
+            <div class="tags"><span class="tag tag-purple">BindingPolicy</span><span class="tag tag-orange">CRD</span></div>
+          </div>
+          <div class="box">
+            <div class="top">
+              <div class="icon">🌐</div>
+              <span class="name">MCS (Multi-Cluster Svc)</span>
+            </div>
+            <div class="desc">ServiceExports and ServiceImports from sig-multicluster. Console shows which services are exported to which clusters and their import status.</div>
+            <div class="tags"><span class="tag tag-blue">ServiceExport</span><span class="tag tag-green">ServiceImport</span></div>
+          </div>
+          <div class="box">
+            <div class="top">
+              <div class="icon">🔍</div>
+              <span class="name">Inspektor Gadget</span>
+            </div>
+            <div class="desc">eBPF-based system inspection. gadgetClient in MCP Bridge queries network traces, DNS lookups, process activity, and system calls directly from the kernel.</div>
+            <div class="tags"><span class="tag tag-red">eBPF</span><span class="tag tag-purple">gadget MCP</span></div>
+          </div>
+        </div>
+
+        <div class="highlight-box">
+          <div class="title">Cluster Query Health Tracking</div>
+          <div style="font-size:11px;color:var(--text2);">
+            Slow clusters get reduced timeouts on retry. Returns <code style="color:var(--accent);">clusterStatus:"unavailable"</code> with HTTP 200 (not 500) to keep dashboard functional. Per-cluster timeout: 15–30s. Aggregated across all healthy clusters.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end arch-stack -->
+
+  <div class="divider"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 2 — CLOUD-NATIVE TOOLS                                       -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div id="cncf">
+    <h2 class="section-h">2. <span>Cloud-Native Tools</span> — Integrated &amp; How They Work</h2>
+    <p style="color:var(--text2);margin-bottom:24px;font-size:13px;">
+      Each tool has dedicated dashboard cards, a <code style="color:var(--accent);">useCached*</code> data hook, and an optional DrillDown modal.
+      The backend queries each tool's resources via the Kubernetes API (CRDs) or its dedicated MCP server.
+    </p>
+  </div>
+
+  <!-- ── GitOps ──────────────────────────────────────────────────────── -->
+  <p class="section-title">GitOps &amp; Deployment</p>
+  <div class="cncf-grid" style="margin-bottom:28px;">
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://argo-cd.readthedocs.io/en/stable/assets/logo.png" alt="ArgoCD" />
+        <div>
+          <div class="name">Argo CD</div>
+          <div class="category">GitOps Continuous Delivery</div>
+        </div>
+      </div>
+      <div class="how">Cards: ArgoCDApplications, ArgoCDHealth, ArgoCDSyncStatus, ArgoCDApplicationSets</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend queries <code>appprojects.argoproj.io</code> &amp; <code>applications.argoproj.io</code> CRDs</div>
+        <div class="flow-step"><div class="num">2</div>Returns sync status (Synced/OutOfSync), health (Healthy/Degraded), app count</div>
+        <div class="flow-step"><div class="num">3</div>Drift detected → GitOpsDrift card highlights diverged apps</div>
+        <div class="flow-step"><div class="num">4</div>ArgoCDApplicationSets card shows template-generated apps across clusters</div>
+      </div>
+      <div class="tags"><span class="tag tag-orange">CRD query</span><span class="tag tag-green">GitOps</span><span class="tag tag-blue">drift</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://helm.sh/img/helm.svg" alt="Helm" />
+        <div>
+          <div class="name">Helm</div>
+          <div class="category">Package Manager</div>
+        </div>
+      </div>
+      <div class="how">Cards: HelmReleaseStatus, HelmHistory, HelmValuesDiff, ChartVersions</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend reads Helm release secrets (<code>helm.sh/release.v1</code>) from all namespaces</div>
+        <div class="flow-step"><div class="num">2</div>Decodes base64 release data → status (deployed/failed/pending), chart version, values</div>
+        <div class="flow-step"><div class="num">3</div>HelmValuesDiff card diffs values between chart default and installed overrides</div>
+        <div class="flow-step"><div class="num">4</div>ChartVersions card checks for available upgrades via chart repo index</div>
+      </div>
+      <div class="tags"><span class="tag tag-blue">Secret decode</span><span class="tag tag-orange">releases</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://fluxcd.io/img/logos/flux-stacked-color.png" alt="Flux CD" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">Flux CD</div>
+          <div class="category">GitOps Toolkit</div>
+        </div>
+      </div>
+      <div class="how">Cards: KustomizationStatus (flux Kustomization CRD)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Queries <code>kustomizations.kustomize.toolkit.fluxcd.io</code> CRD</div>
+        <div class="flow-step"><div class="num">2</div>Reports ready/failed/reconciling state, last applied revision, source</div>
+        <div class="flow-step"><div class="num">3</div>Integrates with GitOpsDrift for cross-cluster comparison</div>
+      </div>
+      <div class="tags"><span class="tag tag-green">Kustomize</span><span class="tag tag-orange">CRD</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://landscape.cncf.io/logos/kargo.svg" alt="Kargo" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">Karpenter</div>
+          <div class="category">Node Autoscaler</div>
+        </div>
+      </div>
+      <div class="how">Cards: KarpenterNodeClaims, ProviderHealth</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Queries <code>nodeclaims.karpenter.sh</code> and <code>nodepools.karpenter.sh</code> CRDs</div>
+        <div class="flow-step"><div class="num">2</div>Shows launch template, instance types, provisioning status</div>
+        <div class="flow-step"><div class="num">3</div>ProviderHealth card shows node capacity vs requested</div>
+      </div>
+      <div class="tags"><span class="tag tag-teal">Autoscale</span><span class="tag tag-blue">NodeClaims</span></div>
+    </div>
+
+  </div>
+
+  <!-- ── Security ────────────────────────────────────────────────────── -->
+  <p class="section-title">Security &amp; Policy</p>
+  <div class="cncf-grid" style="margin-bottom:28px;">
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://kyverno.io/images/kyverno-horizontal.png" alt="Kyverno" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">Kyverno</div>
+          <div class="category">Policy Engine</div>
+        </div>
+      </div>
+      <div class="how">Cards: KyvernoPolicies, CrossClusterPolicyComparison, RecommendedPolicies, KyvernoDetailModal</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend queries <code>policies.kyverno.io</code> and <code>clusterpolicies.kyverno.io</code> CRDs</div>
+        <div class="flow-step"><div class="num">2</div>Returns policy name, rules (validate/mutate/generate), enforcement mode, violation count</div>
+        <div class="flow-step"><div class="num">3</div>CrossClusterPolicyComparison shows which policies are deployed on which clusters</div>
+        <div class="flow-step"><div class="num">4</div>RecommendedPolicies suggests CIS/NIST policies not yet applied</div>
+      </div>
+      <div class="tags"><span class="tag tag-red">Policy</span><span class="tag tag-orange">CRD</span><span class="tag tag-blue">compliance</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://raw.githubusercontent.com/falcosecurity/falco/master/artwork/falco_primary-logo.png" alt="Falco" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">Falco</div>
+          <div class="category">Runtime Security</div>
+        </div>
+      </div>
+      <div class="how">Cards: SecurityIssues (Falco alerts section), ComplianceCards</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend reads Falco alert events from the Kubernetes Event stream</div>
+        <div class="flow-step"><div class="num">2</div>Parses severity (Emergency/Alert/Critical/Warning) and rule name</div>
+        <div class="flow-step"><div class="num">3</div>SecurityIssues card groups alerts by severity with drill-down detail</div>
+        <div class="flow-step"><div class="num">4</div>SSE stream pushes new Falco alerts in real-time via WebSocket hub</div>
+      </div>
+      <div class="tags"><span class="tag tag-red">eBPF</span><span class="tag tag-orange">runtime</span><span class="tag tag-green">SSE</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://raw.githubusercontent.com/aquasecurity/trivy/main/docs/imgs/logo.png" alt="Trivy" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">Trivy</div>
+          <div class="category">Vulnerability Scanner</div>
+        </div>
+      </div>
+      <div class="how">Cards: TrestleScan, ComplianceCards, TrivyDetailModal</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend queries <code>vulnerabilityreports.aquasecurity.github.io</code> CRDs (Trivy Operator)</div>
+        <div class="flow-step"><div class="num">2</div>Returns CVE findings per container image, severity, CVSS score, fix availability</div>
+        <div class="flow-step"><div class="num">3</div>TrivyDetailModal shows affected packages and remediation steps</div>
+        <div class="flow-step"><div class="num">4</div>ComplianceCards shows CIS Benchmark / NSA CISA compliance posture</div>
+      </div>
+      <div class="tags"><span class="tag tag-red">CVE</span><span class="tag tag-orange">CRD</span><span class="tag tag-purple">compliance</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://raw.githubusercontent.com/open-policy-agent/opa/main/docs/website/static/img/logo.svg" alt="OPA" style="background:#fff;padding:3px;" />
+        <div>
+          <div class="name">OPA / Gatekeeper</div>
+          <div class="category">Policy Admission Controller</div>
+        </div>
+      </div>
+      <div class="how">Cards: OPAPolicies, ClusterOPAModal, ComplianceDrift</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend queries <code>constraints.gatekeeper.sh</code> and <code>constrainttemplates.gatekeeper.sh</code></div>
+        <div class="flow-step"><div class="num">2</div>Returns constraint name, enforcement (deny/warn/dryrun), violation count, total audited</div>
+        <div class="flow-step"><div class="num">3</div>ClusterOPAModal shows per-cluster constraint violations in drill-down</div>
+        <div class="flow-step"><div class="num">4</div>ComplianceDrift compares policy posture between clusters over time</div>
+      </div>
+      <div class="tags"><span class="tag tag-purple">Rego</span><span class="tag tag-orange">admission</span><span class="tag tag-blue">constraints</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://raw.githubusercontent.com/open-policy-agent/gatekeeper/master/images/gatekeeper-logo.svg" alt="Kubescape" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">Kubescape</div>
+          <div class="category">K8s Security Posture</div>
+        </div>
+      </div>
+      <div class="how">Cards: SecurityIssues (kubescape section)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Queries <code>workloadconfigurationscans.spdx.softwarecomposition.kubescape.io</code></div>
+        <div class="flow-step"><div class="num">2</div>Reports NSA + MITRE ATT&amp;CK framework control failures</div>
+        <div class="flow-step"><div class="num">3</div>Risk score and remediation guidance per finding</div>
+      </div>
+      <div class="tags"><span class="tag tag-red">NSA</span><span class="tag tag-orange">MITRE</span><span class="tag tag-blue">posture</span></div>
+    </div>
+
+  </div>
+
+  <!-- ── Observability ───────────────────────────────────────────────── -->
+  <p class="section-title">Observability &amp; Cost</p>
+  <div class="cncf-grid" style="margin-bottom:28px;">
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Prometheus_software_logo.svg/200px-Prometheus_software_logo.svg.png" alt="Prometheus" />
+        <div>
+          <div class="name">Prometheus</div>
+          <div class="category">Metrics &amp; Alerting</div>
+        </div>
+      </div>
+      <div class="how">Cards: AlertRules, ActiveAlerts, ResourceUsage (prometheus metrics)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend queries <code>prometheusrules.monitoring.coreos.com</code> CRD for alert rule definitions</div>
+        <div class="flow-step"><div class="num">2</div>Queries Alertmanager API for firing alerts with labels and annotations</div>
+        <div class="flow-step"><div class="num">3</div>ResourceUsage card fetches CPU/memory via Metrics API (<code>metrics.k8s.io</code>)</div>
+        <div class="flow-step"><div class="num">4</div>Backend itself exposes /metrics for self-monitoring</div>
+      </div>
+      <div class="tags"><span class="tag tag-orange">PromQL</span><span class="tag tag-blue">AlertManager</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Grafana_logo.svg/200px-Grafana_logo.svg.png" alt="Grafana" />
+        <div>
+          <div class="name">Grafana</div>
+          <div class="category">Dashboards &amp; Visualization</div>
+        </div>
+      </div>
+      <div class="how">Cards: IframeEmbed (Grafana panels embedded)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>IframeEmbed card accepts a Grafana panel URL as configuration</div>
+        <div class="flow-step"><div class="num">2</div>Renders Grafana dashboard panel inside card boundary with responsive sizing</div>
+        <div class="flow-step"><div class="num">3</div>Supports Grafana's kiosk mode for borderless embedding</div>
+      </div>
+      <div class="tags"><span class="tag tag-orange">iframe</span><span class="tag tag-blue">panels</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://www.opencost.io/img/opencost-icon.svg" alt="OpenCost" style="background:#fff;padding:3px;" />
+        <div>
+          <div class="name">OpenCost / Kubecost</div>
+          <div class="category">Cost Monitoring</div>
+        </div>
+      </div>
+      <div class="how">Cards: OpenCostOverview, KubecostOverview, ClusterCosts</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend calls OpenCost REST API (<code>/model/allocation</code>) for cost breakdown</div>
+        <div class="flow-step"><div class="num">2</div>Returns cost per namespace, workload, label — hourly/daily/monthly</div>
+        <div class="flow-step"><div class="num">3</div>ClusterCosts card renders cost comparison across clusters</div>
+        <div class="flow-step"><div class="num">4</div>Kubecost variant queries <code>/model/costDataModel</code> for efficiency score</div>
+      </div>
+      <div class="tags"><span class="tag tag-green">cost/ns</span><span class="tag tag-orange">REST API</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://landscape.cncf.io/logos/thanos.svg" alt="Thanos" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">Thanos</div>
+          <div class="category">Long-term Metrics Storage</div>
+        </div>
+      </div>
+      <div class="how">Cards: ThanosStatus (thanos_status/)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Queries Thanos Querier API for cross-cluster metrics aggregation</div>
+        <div class="flow-step"><div class="num">2</div>Shows storeEndpoint health, compaction status, object store usage</div>
+        <div class="flow-step"><div class="num">3</div>Enables long-range historical data queries beyond Prometheus retention</div>
+      </div>
+      <div class="tags"><span class="tag tag-purple">long-term</span><span class="tag tag-blue">PromQL</span></div>
+    </div>
+
+  </div>
+
+  <!-- ── Infra / Scaling ────────────────────────────────────────────── -->
+  <p class="section-title">Infrastructure &amp; Scaling</p>
+  <div class="cncf-grid" style="margin-bottom:28px;">
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://keda.sh/img/keda-icon-color.png" alt="KEDA" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">KEDA</div>
+          <div class="category">Event-Driven Autoscaler</div>
+        </div>
+      </div>
+      <div class="how">Cards: KedaStatus (keda_status/)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend queries <code>scaledobjects.keda.sh</code> and <code>scaledjobs.keda.sh</code> CRDs</div>
+        <div class="flow-step"><div class="num">2</div>Returns ScaledObject name, triggers (Kafka, RabbitMQ, Prometheus, cron), replicas min/max</div>
+        <div class="flow-step"><div class="num">3</div>Shows current metric value vs target threshold and active/inactive status</div>
+      </div>
+      <div class="tags"><span class="tag tag-teal">event-driven</span><span class="tag tag-orange">HPA</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://crossplane.io/images/crossplane-logo.svg" alt="Crossplane" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">Crossplane</div>
+          <div class="category">Cloud Infra Control Plane</div>
+        </div>
+      </div>
+      <div class="how">Cards: CrossplaneManagedResources (crossplane-status/)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Queries Crossplane composite resources and managed resources via dynamic client</div>
+        <div class="flow-step"><div class="num">2</div>Returns provider (AWS/GCP/Azure), managed resource name, sync status (Ready/NotReady)</div>
+        <div class="flow-step"><div class="num">3</div>Shows composition tree linking XR → XRC → ManagedResource</div>
+      </div>
+      <div class="tags"><span class="tag tag-blue">cloud infra</span><span class="tag tag-orange">CRD</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://karmada.io/img/karmada-icon-color.png" alt="Karmada" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">Karmada</div>
+          <div class="category">Multi-Cluster Federation</div>
+        </div>
+      </div>
+      <div class="how">Cards: KarmadaStatus (karmada_status/)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend queries <code>clusters.cluster.karmada.io</code> and <code>propagationpolicies.policy.karmada.io</code></div>
+        <div class="flow-step"><div class="num">2</div>Returns member cluster health, propagation policy status, resource binding state</div>
+        <div class="flow-step"><div class="num">3</div>Shows workload distribution across Karmada-managed cluster fleet</div>
+      </div>
+      <div class="tags"><span class="tag tag-purple">federation</span><span class="tag tag-orange">CRD</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://kubevela.io/img/logo.svg" alt="KubeVela" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">KubeVela</div>
+          <div class="category">OAM Application Platform</div>
+        </div>
+      </div>
+      <div class="how">Cards: KubeVelaStatus (kubevela_status/)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Queries <code>applications.core.oam.dev</code> CRD</div>
+        <div class="flow-step"><div class="num">2</div>Returns OAM application status, component health, trait bindings</div>
+        <div class="flow-step"><div class="num">3</div>Shows workflow step status for multi-cluster OAM app delivery</div>
+      </div>
+      <div class="tags"><span class="tag tag-green">OAM</span><span class="tag tag-orange">CRD</span></div>
+    </div>
+
+  </div>
+
+  <!-- ── Data / AI-ML ───────────────────────────────────────────────── -->
+  <p class="section-title">Data, Streaming &amp; AI/ML</p>
+  <div class="cncf-grid" style="margin-bottom:28px;">
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://strimzi.io/images/strimzi_logo_stacked.png" alt="Strimzi" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">Strimzi (Kafka)</div>
+          <div class="category">Kafka on Kubernetes</div>
+        </div>
+      </div>
+      <div class="how">Cards: StrimziStatus (strimzi_status/)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend queries <code>kafkas.kafka.strimzi.io</code> and <code>kafkatopics.kafka.strimzi.io</code> CRDs</div>
+        <div class="flow-step"><div class="num">2</div>Returns Kafka cluster health, broker count, Zookeeper/KRaft status, topic count</div>
+        <div class="flow-step"><div class="num">3</div>Shows partition count, replication factor, under-replicated partition alerts</div>
+      </div>
+      <div class="tags"><span class="tag tag-blue">Kafka</span><span class="tag tag-orange">CRD</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://fluentd.org/images/fluentd-logo.png" alt="Fluentd" style="background:#fff;padding:2px;" />
+        <div>
+          <div class="name">Fluentd / FluentBit</div>
+          <div class="category">Log Aggregation</div>
+        </div>
+      </div>
+      <div class="how">Cards: FluentdStatus (fluentd_status/)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend queries Fluentd DaemonSet pod health and buffer metrics</div>
+        <div class="flow-step"><div class="num">2</div>Returns buffer queue length, retry count, chunk size, destination health</div>
+        <div class="flow-step"><div class="num">3</div>Alerts when buffer is backing up or destination unavailable</div>
+      </div>
+      <div class="tags"><span class="tag tag-teal">logs</span><span class="tag tag-orange">buffer</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://ray.io/static/ray_icon.svg" alt="KubeRay" style="background:#fff;padding:3px;" />
+        <div>
+          <div class="name">KubeRay</div>
+          <div class="category">Distributed AI/ML</div>
+        </div>
+      </div>
+      <div class="how">Cards: KubeRayFleet (kuberay_fleet/)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Backend queries <code>rayclusters.ray.io</code>, <code>rayjobs.ray.io</code>, <code>rayservices.ray.io</code> CRDs</div>
+        <div class="flow-step"><div class="num">2</div>Returns head node status, worker node count, available resources (CPU/GPU)</div>
+        <div class="flow-step"><div class="num">3</div>RayJob status: pending/running/succeeded/failed with logs link</div>
+        <div class="flow-step"><div class="num">4</div>Integrates with GPU cards for LLM inference fleet monitoring</div>
+      </div>
+      <div class="tags"><span class="tag tag-red">GPU</span><span class="tag tag-purple">distributed</span><span class="tag tag-orange">CRD</span></div>
+    </div>
+
+    <div class="tool-card">
+      <div class="head">
+        <img src="https://openfeature.dev/img/logo.svg" alt="OpenFeature" style="background:#fff;padding:3px;" />
+        <div>
+          <div class="name">OpenFeature</div>
+          <div class="category">Feature Flag Standard</div>
+        </div>
+      </div>
+      <div class="how">Cards: OpenFeatureStatus (openfeature_status/)</div>
+      <div class="flow-steps">
+        <div class="flow-step"><div class="num">1</div>Queries <code>featureflags.core.openfeature.dev</code> CRD for flag definitions</div>
+        <div class="flow-step"><div class="num">2</div>Returns flag key, state (enabled/disabled), variant, targeting rules</div>
+        <div class="flow-step"><div class="num">3</div>Shows operator health and number of active/stale flags</div>
+      </div>
+      <div class="tags"><span class="tag tag-blue">feature flags</span><span class="tag tag-orange">CRD</span></div>
+    </div>
+
+  </div>
+
+  <!-- ── AI Providers ───────────────────────────────────────────────── -->
+  <div class="divider"></div>
+  <div id="ai">
+    <h2 class="section-h">3. <span>AI Providers</span> — 42+ Integrations</h2>
+  </div>
+
+  <div class="grid g3" style="margin-bottom:28px;">
+
+    <div class="box" style="padding:16px;">
+      <div class="top">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/2023_Anthopic_Claude_logo.svg/240px-2023_Anthopic_Claude_logo.svg.png" alt="Claude" style="width:32px;height:32px;background:#cc785c;border-radius:6px;padding:3px;" />
+        <div>
+          <div class="name" style="font-size:14px;">Anthropic Claude</div>
+          <div style="font-size:11px;color:var(--text2);">provider_claude.go</div>
+        </div>
+      </div>
+      <div class="desc" style="font-size:12px;">Primary AI provider. Used for card suggestions (tracks user focus via card_focus table), CardChat drill-down analysis, mission troubleshooting, icon recommendations. Streaming responses via SSE.</div>
+      <div class="tags"><span class="tag tag-red">Claude 3.5/3.7</span><span class="tag tag-blue">streaming</span><span class="tag tag-purple">MCP</span></div>
+    </div>
+
+    <div class="box" style="padding:16px;">
+      <div class="top">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/OpenAI_Logo.svg/200px-OpenAI_Logo.svg.png" alt="OpenAI" style="width:32px;height:32px;background:#fff;border-radius:6px;padding:3px;" />
+        <div>
+          <div class="name" style="font-size:14px;">OpenAI GPT</div>
+          <div style="font-size:11px;color:var(--text2);">provider_openai.go</div>
+        </div>
+      </div>
+      <div class="desc" style="font-size:12px;">GPT-4o and GPT-4 Turbo. Used as fallback when Claude unavailable. Same ChatRequest interface — provider is swappable at runtime via settings. Supports function calling for cluster operations.</div>
+      <div class="tags"><span class="tag tag-green">GPT-4o</span><span class="tag tag-blue">functions</span></div>
+    </div>
+
+    <div class="box" style="padding:16px;">
+      <div class="top">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Google_Gemini_logo.svg/200px-Google_Gemini_logo.svg.png" alt="Gemini" style="width:32px;height:32px;background:#fff;border-radius:6px;padding:3px;" />
+        <div>
+          <div class="name" style="font-size:14px;">Google Gemini</div>
+          <div style="font-size:11px;color:var(--text2);">provider_gemini.go</div>
+        </div>
+      </div>
+      <div class="desc" style="font-size:12px;">Gemini 1.5 Pro / Flash. Configurable via API key in Settings. Available as third provider option. Supports multi-modal prompts for container image analysis.</div>
+      <div class="tags"><span class="tag tag-orange">Gemini 1.5</span><span class="tag tag-blue">multi-modal</span></div>
+    </div>
+
+  </div>
+
+  <!-- ── Local coding agents ─────────────────────────────────────────── -->
+  <div class="highlight-box" style="margin-bottom:32px;">
+    <div class="title">Local Coding Agent Adapters (pkg/agent/) — 39 adapters</div>
+    <div class="grid g7" style="gap:8px;margin-top:8px;">
+      <div style="font-size:11px;color:var(--text2);padding:6px 10px;background:rgba(88,166,255,.07);border-radius:6px;text-align:center;">Claude Desktop</div>
+      <div style="font-size:11px;color:var(--text2);padding:6px 10px;background:rgba(88,166,255,.07);border-radius:6px;text-align:center;">Cline</div>
+      <div style="font-size:11px;color:var(--text2);padding:6px 10px;background:rgba(88,166,255,.07);border-radius:6px;text-align:center;">Cursor</div>
+      <div style="font-size:11px;color:var(--text2);padding:6px 10px;background:rgba(88,166,255,.07);border-radius:6px;text-align:center;">Continue</div>
+      <div style="font-size:11px;color:var(--text2);padding:6px 10px;background:rgba(88,166,255,.07);border-radius:6px;text-align:center;">VSCode Copilot</div>
+      <div style="font-size:11px;color:var(--text2);padding:6px 10px;background:rgba(88,166,255,.07);border-radius:6px;text-align:center;">JetBrains</div>
+      <div style="font-size:11px;color:var(--text2);padding:6px 10px;background:rgba(88,166,255,.07);border-radius:6px;text-align:center;">Zed</div>
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-top:8px;">
+      Each adapter reads the agent's config directory, injects MCP server config pointing to <code style="color:var(--accent);">kc-agent</code>, and exposes cluster tools so the coding agent can query pods, deployments, logs, and resource status directly from the IDE.
+    </div>
+  </div>
+
+  <!-- ─── DATA FLOW ─────────────────────────────────────────────────── -->
+  <div class="divider"></div>
+  <div id="dataflow">
+    <h2 class="section-h">4. <span>End-to-End Data Flow</span></h2>
+  </div>
+
+  <div class="grid g2" style="margin-bottom:28px;">
+
+    <div>
+      <p class="section-title" style="margin-bottom:10px;">Pod Issues — Full Call Chain</p>
+      <div class="dataflow"><span class="c">Browser loads Dashboard</span>
+  <span class="k">↓</span>
+  <span class="k">&lt;PodIssues /&gt;</span> renders
+  <span class="k">↓</span>
+  <span class="v">useCachedPodIssues()</span> hook fires
+  <span class="k">↓</span>
+  Check <span class="a">IndexedDB/SQLite cache</span>
+    <span class="c">✓ cached →</span> render instantly <span class="c">(SWR warm)</span>
+    <span class="c">✗ empty  →</span> show skeleton loader
+  <span class="k">↓</span>  background fetch regardless
+  <span class="p">GET /api/mcp/pods/issues</span>
+    <span class="c">Authorization: Bearer &lt;JWT&gt;</span>
+  <span class="k">↓ Go Backend</span>
+  JWT validated → user extracted
+  <span class="k">↓</span>
+  For each <span class="a">healthy cluster</span>:
+    <span class="p">MCP Bridge.GetPodIssues(cluster)</span>
+    <span class="k">↓</span>
+    JSON-RPC over stdio → <span class="a">kubestellar-ops</span>
+    <span class="k">↓</span>
+    kubestellar-ops queries <span class="v">Kubernetes API</span>
+    <span class="k">↓</span>
+    Returns <span class="v">PodIssue[]</span> { name, ns, cluster, issues[] }
+  <span class="k">↓</span>
+  Aggregate (30s timeout per cluster)
+  HTTP <span class="v">200 OK</span> with JSON results
+  <span class="k">↓ Frontend</span>
+  Cache → IndexedDB/SQLite
+  React state update → card re-renders
+  isRefreshing=false, isDemoData=false</div>
+    </div>
+
+    <div>
+      <p class="section-title" style="margin-bottom:10px;">Real-Time Event Stream</p>
+      <div class="dataflow"><span class="c">User opens Dashboard</span>
+  <span class="k">↓</span>
+  Frontend opens <span class="v">WebSocket</span>
+    <span class="p">ws://host:8080/ws</span>
+    <span class="c">Auth: JWT in query param</span>
+  <span class="k">↓ Backend WebSocket Hub</span>
+  Client registered in hub map
+  <span class="k">↓</span>
+  Background goroutines watch:
+    <span class="a">K8s EventInformer</span> → pod/node/deploy events
+    <span class="a">Falco alerts</span>     → security events
+    <span class="a">MCP cluster health</span> → status changes
+  <span class="k">↓</span>
+  Event arrives → <span class="v">hub.Broadcast(event)</span>
+  <span class="k">↓</span>
+  All connected WS clients receive msg
+  <span class="k">↓ Frontend</span>
+  <span class="v">EventStream</span> card appends event to list
+  <span class="v">ActiveAlerts</span> card increments badge count
+  <span class="v">ClusterHealth</span> card updates status dot
+
+<span class="c">─── SSE (large dataset) variant ─────────────</span>
+  <span class="p">GET /api/mcp/pods/stream</span>
+  <span class="k">↓ Backend</span>
+  Sends <span class="v">text/event-stream</span> response
+  Writes chunks as data arrives per cluster
+  <span class="k">↓ Frontend</span>
+  lib/sseClient.ts consumes ReadableStream
+  Updates card progressively as chunks arrive</div>
+    </div>
+
+  </div>
+
+  <!-- ─── AUTH & SECURITY ───────────────────────────────────────────── -->
+  <div class="divider"></div>
+  <div id="security">
+    <h2 class="section-h">5. <span>Authentication &amp; Security</span></h2>
+  </div>
+
+  <div class="grid g3" style="margin-bottom:40px;">
+    <div class="box" style="padding:16px;">
+      <div class="top"><div class="icon">🔐</div><span class="name">GitHub OAuth 2.0</span></div>
+      <div class="desc">
+        State tokens stored in-memory map (not cookies — Safari compatibility). 10-minute TTL. Background cleanup every 5 min. Map pruned when &gt;100 entries. State is single-use.
+      </div>
+      <div class="tags"><span class="tag tag-yellow">state param</span><span class="tag tag-blue">CSRF safe</span></div>
+    </div>
+    <div class="box" style="padding:16px;">
+      <div class="top"><div class="icon">🎫</div><span class="name">JWT Tokens</span></div>
+      <div class="desc">
+        Signed with random JWTSecret. 7-day TTL. Silent refresh triggered at 50% lifetime. Contains: user ID, GitHub login, email, avatar URL. Sent as <code>Authorization: Bearer</code> header.
+      </div>
+      <div class="tags"><span class="tag tag-yellow">7-day</span><span class="tag tag-blue">auto-refresh</span></div>
+    </div>
+    <div class="box" style="padding:16px;">
+      <div class="top"><div class="icon">🛡️</div><span class="name">Middleware Stack</span></div>
+      <div class="desc">
+        All API routes require valid JWT. Rate limiting prevents abuse. CORS restricts to configured FrontendURL. DOMPurify (dompurify v3) sanitizes user-provided HTML in frontend to prevent XSS.
+      </div>
+      <div class="tags"><span class="tag tag-red">rate limit</span><span class="tag tag-orange">CORS</span><span class="tag tag-green">XSS safe</span></div>
+    </div>
+  </div>
+
+  <!-- ─── DEPLOY ────────────────────────────────────────────────────── -->
+  <div class="divider"></div>
+  <h2 class="section-h">6. <span>Deployment</span></h2>
+
+  <div class="grid g4" style="margin-bottom:48px;">
+    <div class="box">
+      <div class="top">
+        <img src="https://www.docker.com/wp-content/uploads/2022/03/vertical-logo-monochromatic.png" alt="Docker" style="background:#fff;padding:2px;" />
+        <span class="name">Docker / OCI Image</span>
+      </div>
+      <div class="desc">Multi-stage Dockerfile. Stage 1: node:22-alpine builds React app. Stage 2: golang:1.25-alpine builds Go binary. Stage 3: distroless final image (~30 MB). Entrypoint: ./console.</div>
+      <div class="tags"><span class="tag tag-blue">multi-stage</span><span class="tag tag-green">distroless</span></div>
+    </div>
+    <div class="box">
+      <div class="top">
+        <img src="https://helm.sh/img/helm.svg" alt="Helm" />
+        <span class="name">Helm Chart</span>
+      </div>
+      <div class="desc">deploy/helm/ chart with configurable: image, replicas, ingress, secrets (GitHub OAuth, AI keys), PVC for SQLite data, ServiceAccount, RBAC for k8s API access.</div>
+      <div class="tags"><span class="tag tag-orange">deploy/helm</span><span class="tag tag-blue">RBAC</span></div>
+    </div>
+    <div class="box">
+      <div class="top">
+        <div class="icon">🌐</div>
+        <span class="name">Netlify (Demo)</span>
+      </div>
+      <div class="desc">netlify.toml deploys static frontend with MSW (Mock Service Worker) for demo data. No backend required. Full feature preview with demo Kubernetes data. Zero-config deploy.</div>
+      <div class="tags"><span class="tag tag-teal">MSW mocks</span><span class="tag tag-green">static</span></div>
+    </div>
+    <div class="box">
+      <div class="top">
+        <div class="icon">🚀</div>
+        <span class="name">GoReleaser</span>
+      </div>
+      <div class="desc">.goreleaser.yaml builds multi-arch binaries (linux/amd64, linux/arm64, darwin). GitHub Actions CI publishes Docker images to ghcr.io on tag push.</div>
+      <div class="tags"><span class="tag tag-purple">multi-arch</span><span class="tag tag-orange">ghcr.io</span></div>
+    </div>
+  </div>
+
+  <div class="sr"></div>
+
+  <div style="text-align:center;color:var(--text2);font-size:11px;padding:20px 0;border-top:1px solid var(--border);">
+    KubeStellar Console Architecture Diagram &nbsp;·&nbsp; Generated from source at
+    <code style="color:var(--accent);">github.com/kubestellar/console</code>
+    &nbsp;·&nbsp; All logos are trademarks of their respective owners
+  </div>
+
+</div><!-- .page -->
+
+</body>
+</html>
